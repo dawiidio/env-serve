@@ -1,5 +1,5 @@
 {
-  "name": "docker-front-test",
+  "name": "serve-with-config",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -8,5 +8,13 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "args-parser": "^1.1.0",
+    "commander": "^2.20.0",
+    "serve-handler": "^6.1.0"
+  },
+  "bin": {
+    "serve-with-config": "./index.js"
+  }
 }
