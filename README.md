@@ -1,6 +1,6 @@
 # env-serve
 
-HTTP(S) serer for static files with dynamic config from env vars written to js/html/json files
+HTTP(S) server for static files with dynamic config from env vars written to js/html/json files
 
 usage:
 
