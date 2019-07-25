@@ -5,7 +5,7 @@ const http = require('http');
 const https = require('https');
 const commander = require('commander');
 const pkg = require('./package.json');
-const { readFileSync } = require('fs');
+const { readFileSync, writeFileSync } = require('fs');
 
 const CIPHERS = [
     'ECDHE-RSA-AES128-SHA256',
@@ -18,29 +18,25 @@ const CIPHERS = [
 ].join(':');
 
 commander
-    .command('serve-with-config [html] [js]')
+    .command('env-serve')
     .version(pkg.version)
     .option('-v, --version', 'output the version number')
     .option('-g, --global [globalName]', 'Global variable name eg. window.yourName', 'appConfig')
     .option('-c, --cert [pathToCert]', 'Path to cert file')
     .option('-C, --ca [pathToCa]', 'Path to ca file')
     .option('-S, --https [pathToCa]', 'Is https mode', false)
-    .option('-k, --key [pathToKey]', 'Path to cert key file')
+    .option('-k, --cert-key [pathToCertKey]', 'Path to cert key file')
     .option('-p, --port [port]', 'port', 3000)
+    .option('-f, --config-file [configFile]', 'port', 'config.js')
     .parse(process.argv);
 
 const command = commander.commands[0];
 
-const [
-    pathToHTML = `${process.cwd()}/index.html`,
-    pathToConfig = `${process.cwd()}/config.js`
-] = command.args;
-
-console.log(pathToConfig);
+const pathToConfig = `${process.cwd()}/${command.configFile}`;
 
 const {
     ca: pathToCa,
-    key: pathToKey,
+    certKey: pathToCertKey,
     cert: pathToCert,
     https: httpsMode,
     global: globalName,
@@ -51,11 +47,11 @@ let server;
 
 async function requestHandler(request, response) {
     await handler(request, response, {
-        public: __dirname+'/public'
+        public: process.cwd()
     });
 }
 
-const parsers = {
+const readParsers = {
     json: jsonString => JSON.parse(jsonString),
     js: jsString => {
         const regex = new RegExp(`${globalName}\\s{0,}=\\s{0,}{(.+?)}`, 'gms');
@@ -72,7 +68,29 @@ const parsers = {
         catch (e) {
             throw new Error('Wrong configuration format')
         }
-    }
+    },
+    html: function(...args) { return this.js(...args) }
+};
+
+const writeParsers = {
+    json: (fileContent, config) => {
+        return JSON.stringify(config, null, 4);
+    },
+    js: (fileContent, config) => {
+        const regex = new RegExp(`${globalName}\\s{0,}=\\s{0,}{(.+?)}`, 'gms');
+        const bodyRegex = new RegExp(`{(.+?)}`, 'gms');
+        const configString = JSON.stringify(config, null, 4);
+
+        const matchedMainConfig = fileContent.match(regex);
+
+        if (!matchedMainConfig)
+            throw new Error(`Can't parse js configuration for write`);
+
+        const matchedConfigBody = matchedMainConfig[0].match(bodyRegex);
+
+        return fileContent.replace(matchedConfigBody[0], configString);
+    },
+    html: function(...args) { return this.js(...args) }
 };
 
 function extractFileType(path) {
@@ -81,40 +99,59 @@ function extractFileType(path) {
     return extension;
 }
 
-function extractConfigFromFile(pathToFile) {
-    const fileType = extractFileType(pathToFile);
+function mergeConfigWithEnvVariables(config, env) {
+    return Object.entries(config).reduce((acc, [key, val]) => {
+        const newVal = env.hasOwnProperty(key) ? env[key] : val;
 
-    if (!parsers[fileType])
-        throw new Error(`Unsupported filetype ${fileType}`);
-
-    const fileContent = readFileSync(pathToFile).toString();
-
-    return parsers[fileType](fileContent);
+        return {
+            ...acc,
+            [key]: newVal
+        };
+    }, {});
 }
 
-console.log(extractConfigFromFile(pathToConfig));
+function runServer() {
+    if (httpsMode) {
+        const ca = pathToCa ? readFileSync(pathToCa).toString() : undefined;
+        const key = pathToCertKey ? readFileSync(pathToCertKey).toString() : undefined;
+        const cert = pathToCert ? readFileSync(pathToCert).toString() : undefined;
 
-if (httpsMode) {
-    const ca = pathToCa ? readFileSync(pathToCa).toString() : undefined;
-    const key = pathToKey ? readFileSync(pathToKey).toString() : undefined;
-    const cert = pathToCert ? readFileSync(pathToCert).toString() : undefined;
+        if (!pathToCertKey || !pathToCert)
+            throw new Error(`For HTTPS server must be provided at least key and cert`);
 
-    if (!pathToKey || !pathToCert)
-        throw new Error(`For HTTPS server must be provided at least key and cert`);
+        const options = {
+            ca,
+            key,
+            cert,
+            ciphers: CIPHERS
+        };
 
-    const options = {
-        ca,
-        key,
-        cert,
-        ciphers: CIPHERS
-    };
+        server = https.createServer(options, requestHandler);
+    }
+    else {
+        server = http.createServer(requestHandler);
+    }
 
-    server = https.createServer(options, requestHandler);
+    server.listen(port);
 }
-else {
-    server = http.createServer(requestHandler);
+
+function main() {
+    const fileType = extractFileType(pathToConfig);
+
+    if (!readParsers[fileType] || !writeParsers[fileType])
+        throw new Error(`Unsupported file type ${fileType}`);
+
+    const rawFileContent = readFileSync(pathToConfig).toString();
+    const parsedConfig = readParsers[fileType](rawFileContent);
+
+    const mergedConfig = mergeConfigWithEnvVariables(parsedConfig, process.env);
+    const rawMergedFileContent = writeParsers[fileType](rawFileContent, mergedConfig);
+
+    writeFileSync(pathToConfig, rawMergedFileContent);
+
+    runServer();
+
+    console.log(`Server url: http${httpsMode ? 's' : ''}://localhost:${port}\nConfig:\n${JSON.stringify(mergedConfig, null, 4)}`);
 }
 
-// server.listen(port);
-
-console.log(`Server url: http${httpsMode ? 's' : ''}://localhost:${port}`);
+main();
