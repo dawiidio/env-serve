@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>env-server demo</title>
+    <!--<script src="config.js"></script>-->
+    <script>
+        window.appConfig = {
+    "MY_TEST_VAL": "Hello world",
+    "MY_TEST_VAL_2": 123
+};
+    </script>
+</head>
+<body>
+<h2>Application config:</h2>
+<pre></pre>
+<script>
+    const c = document.querySelector('pre');
+    c.innerText = JSON.stringify(window.appConfig, null, 4);
+</script>
+</body>
+</html>

@@ -4,8 +4,9 @@ const handler = require('serve-handler');
 const http = require('http');
 const https = require('https');
 const commander = require('commander');
+const pem = require('pem');
 const pkg = require('./package.json');
-const { readFileSync, writeFileSync } = require('fs');
+const { readFileSync, writeFileSync, accessSync, F_OK } = require('fs');
 
 const CIPHERS = [
     'ECDHE-RSA-AES128-SHA256',
@@ -21,13 +22,14 @@ commander
     .command('env-serve')
     .version(pkg.version)
     .option('-v, --version', 'output the version number')
-    .option('-g, --global [globalName]', 'Global variable name eg. window.yourName', 'appConfig')
-    .option('-c, --cert [pathToCert]', 'Path to cert file')
-    .option('-C, --ca [pathToCa]', 'Path to ca file')
-    .option('-S, --https [pathToCa]', 'Is https mode', false)
-    .option('-k, --cert-key [pathToCertKey]', 'Path to cert key file')
+    .option('-g, --global [globalName]', 'global variable name eg. window.yourName', 'appConfig')
+    .option('-c, --cert [pathToCert]', 'path to cert file')
+    .option('-C, --ca [pathToCa]', 'path to ca file')
+    .option('-S, --https [pathToCa]', 'is https mode', false)
+    .option('-k, --cert-key [pathToCertKey]', 'path to cert key file')
     .option('-p, --port [port]', 'port', 3000)
-    .option('-f, --config-file [configFile]', 'port', 'config.js')
+    .option('-f, --config-file [configFile]', 'file where config exists', 'index.html')
+    .option('-s, --self-signed [selfSigned]', 'generate self signed certificate for server')
     .parse(process.argv);
 
 const command = commander.commands[0];
@@ -40,8 +42,11 @@ const {
     cert: pathToCert,
     https: httpsMode,
     global: globalName,
-    port
+    port,
+    selfSigned
 } = command;
+
+const isHTTPS = httpsMode || selfSigned;
 
 let server;
 
@@ -110,14 +115,41 @@ function mergeConfigWithEnvVariables(config, env) {
     }, {});
 }
 
-function runServer() {
-    if (httpsMode) {
-        const ca = pathToCa ? readFileSync(pathToCa).toString() : undefined;
-        const key = pathToCertKey ? readFileSync(pathToCertKey).toString() : undefined;
-        const cert = pathToCert ? readFileSync(pathToCert).toString() : undefined;
+function generateCertificate() {
+    return new Promise((res, rej) => {
+        pem.createCertificate({ days: 360, selfSigned: true }, (err, keys) => {
+            if (err)
+                return rej(err);
 
-        if (!pathToCertKey || !pathToCert)
+            res({
+                cert: keys.certificate,
+                key: keys.serviceKey
+            });
+        });
+    });
+}
+
+async function getCertificate() {
+    if (selfSigned)
+        return await generateCertificate();
+
+    const key = pathToCertKey ? readFileSync(pathToCertKey).toString() : undefined;
+    const cert = pathToCert ? readFileSync(pathToCert).toString() : undefined;
+
+    return { key, cert };
+}
+
+async function runServer() {
+    if (isHTTPS) {
+        const ca = pathToCa ? readFileSync(pathToCa).toString() : undefined;
+
+        if (!selfSigned && (!pathToCertKey || !pathToCert))
             throw new Error(`For HTTPS server must be provided at least key and cert`);
+
+        const {
+            cert,
+            key
+        } = await getCertificate();
 
         const options = {
             ca,
@@ -135,11 +167,28 @@ function runServer() {
     server.listen(port);
 }
 
+function isFileExists(path) {
+    try {
+        accessSync(path, F_OK);
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+
 function main() {
     const fileType = extractFileType(pathToConfig);
 
-    if (!readParsers[fileType] || !writeParsers[fileType])
-        throw new Error(`Unsupported file type ${fileType}`);
+    if (!readParsers[fileType] || !writeParsers[fileType]) {
+        console.log(`Unsupported file type ${fileType}`);
+        process.exit(1);
+    }
+
+    if (!isFileExists(pathToConfig)) {
+        console.log(`Can't find config config file under path ${pathToConfig}`);
+        process.exit(1);
+    }
 
     const rawFileContent = readFileSync(pathToConfig).toString();
     const parsedConfig = readParsers[fileType](rawFileContent);
@@ -149,9 +198,15 @@ function main() {
 
     writeFileSync(pathToConfig, rawMergedFileContent);
 
-    runServer();
+    try {
+        runServer();
+        console.log(`Server url: http${(isHTTPS) ? 's' : ''}://localhost:${port}\nConfig:\n${JSON.stringify(mergedConfig, null, 4)}`);
+    }
+    catch (e) {
+        console.log(e.message);
+        process.exit(1);
+    }
 
-    console.log(`Server url: http${httpsMode ? 's' : ''}://localhost:${port}\nConfig:\n${JSON.stringify(mergedConfig, null, 4)}`);
 }
 
 main();

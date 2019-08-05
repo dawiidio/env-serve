@@ -9,12 +9,14 @@
   "repository": {
     "url": "https://github.com/dawiidio/env-serve"
   },
+  "files": ["index.js"],
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "args-parser": "^1.1.0",
     "commander": "^2.20.0",
+    "pem": "^1.14.2",
     "serve-handler": "^6.1.0"
   },
   "bin": {
