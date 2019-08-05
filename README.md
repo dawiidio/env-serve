@@ -15,6 +15,10 @@ env-serve -p 3003 -f index.html
 
 # run https server with selfsigned certs
 env-serve -s -p 3003 -f index.html
+
+# run server and change values, values from env variables will be written to config in index.html
+
+EXPORT MY_TEST_VAL="My test value"; env-serve -f index.html
 ```
 
 Help output:
