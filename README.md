@@ -1,6 +1,6 @@
 # env-serve
 
-HTTP(S) server for static files with dynamic config from env vars
+HTTP(S) server for static files with dynamic config from env vars. Config saved staticly in .html or .js files can be changed during server start, new values for configuration are pulled from env variables (example below)
 
 usage:
 
