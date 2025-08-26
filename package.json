@@ -1,7 +1,8 @@
 {
   "name": "env-serve",
   "version": "1.0.3",
-  "description": "",
+  "description": "Serve static files with https and dynamic config",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,9 +13,9 @@
   "files": [
     "index.js"
   ],
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["server", "https", "ssl", "env", "dynamic", "config"],
+  "author": "Dawid Wojda <dawid@dawiid.io>",
+  "license": "MIT",
   "dependencies": {
     "args-parser": "^1.1.0",
     "commander": "^2.20.0",

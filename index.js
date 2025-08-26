@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 
-const handler = require('serve-handler');
-const http = require('http');
-const https = require('https');
-const commander = require('commander');
-const pem = require('pem');
-const pkg = require('./package.json');
-const { readFileSync, writeFileSync, accessSync, F_OK } = require('fs');
+import handler from 'serve-handler';
+import * as http from 'node:http';
+import * as https from 'node:https';
+import commander from 'commander';
+import pem from 'pem';
+import { readFileSync, writeFileSync, accessSync, F_OK } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+// Read package.json version without JSON import assertions for broad Node compatibility
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json')).toString());
 
 const CIPHERS = [
     'ECDHE-RSA-AES128-SHA256',
