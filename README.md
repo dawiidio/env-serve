@@ -28,6 +28,12 @@ env-serve -f config.js
 
 # change default global config var name, now you should rename appConfig to fooBar
 env-serve -g fooBar
+
+# override config values via CLI options (string, numbers, booleans, nested using dot path)
+# e.g. set apiUrl
+env-serve --option "apiUrl=http://localhost:5000"
+# multiple overrides are supported
+env-serve -o "apiUrl=http://localhost:5000" -o "feature.enabled=true" -o "retries=3" -o "nested.key=value"
 ```
 
 ### How it works?
@@ -108,5 +114,6 @@ Options:
   -p, --port [port]               port (default: 3000)
   -f, --config-file [configFile]  file where config exists (default: "index.html")
   -s, --self-signed [selfSigned]  generate self signed certificate for server
+  -o, --option [key=value]        override config option, may be repeated (e.g. --option "apiUrl=http://localhost:5000")
   -h, --help                      output usage information
 ```

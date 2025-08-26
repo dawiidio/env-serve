@@ -36,6 +36,7 @@ commander
     .option('-p, --port [port]', 'port', 3000)
     .option('-f, --config-file [configFile]', 'file where config exists', 'index.html')
     .option('-s, --self-signed [selfSigned]', 'generate self signed certificate for server')
+    .option('-o, --option [key=value]', 'override config option, may be repeated (e.g. --option "apiUrl=http://localhost:5000")', (val, memo) => { memo.push(val); return memo; }, [])
     .parse(process.argv);
 
 const command = commander.commands[0];
@@ -121,6 +122,50 @@ function mergeConfigWithEnvVariables(config, env) {
     }, {});
 }
 
+function parseOptionValue(val) {
+    const t = (typeof val === 'string') ? val.trim() : val;
+    if (typeof t !== 'string') return t;
+    if (t === 'true') return true;
+    if (t === 'false') return false;
+    if (t === 'null') return null;
+    if (/^-?\d+(?:\.\d+)?$/.test(t)) return Number(t);
+    if ((t.startsWith('{') || t.startsWith('[') || t.startsWith('"')) && t.endsWith('}')) {
+        try { return JSON.parse(t); } catch (e) { /* ignore */ }
+    }
+    if (t.startsWith('{') || t.startsWith('[')) {
+        try { return JSON.parse(t); } catch (e) { /* ignore */ }
+    }
+    return t;
+}
+
+function setDeep(obj, path, value) {
+    const parts = path.split('.').filter(Boolean);
+    if (parts.length === 0) return obj;
+    let cursor = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i];
+        if (typeof cursor[p] !== 'object' || cursor[p] === null) {
+            cursor[p] = {};
+        }
+        cursor = cursor[p];
+    }
+    cursor[parts[parts.length - 1]] = value;
+    return obj;
+}
+
+function applyOptionsToConfig(config, optionsArr) {
+    if (!Array.isArray(optionsArr)) return config;
+    return optionsArr.reduce((acc, entry) => {
+        if (typeof entry !== 'string') return acc;
+        const idx = entry.indexOf('=');
+        if (idx === -1) return acc;
+        const keyPath = entry.slice(0, idx).trim();
+        const rawVal = entry.slice(idx + 1);
+        const parsedVal = parseOptionValue(rawVal);
+        return setDeep(acc, keyPath, parsedVal);
+    }, { ...config });
+}
+
 function generateCertificate() {
     return new Promise((res, rej) => {
         pem.createCertificate({ days: 360, selfSigned: true }, (err, keys) => {
@@ -199,7 +244,13 @@ function main() {
     const rawFileContent = readFileSync(pathToConfig).toString();
     const parsedConfig = readParsers[fileType](rawFileContent);
 
-    const mergedConfig = mergeConfigWithEnvVariables(parsedConfig, process.env);
+    // Merge from env vars
+    let mergedConfig = mergeConfigWithEnvVariables(parsedConfig, process.env);
+
+    // Apply command-line overrides
+    const cliOptions = Array.isArray(command['option']) ? command['option'] : [];
+    mergedConfig = applyOptionsToConfig(mergedConfig, cliOptions);
+
     const rawMergedFileContent = writeParsers[fileType](rawFileContent, mergedConfig);
 
     writeFileSync(pathToConfig, rawMergedFileContent);
